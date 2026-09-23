@@ -2,27 +2,27 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { ZodError } from 'zod';
 import { config } from './lib/config.js';
-import { ErrorApi } from './lib/errores.js';
-import { rutasProductos } from './routes/productos.js';
-import { rutasCategorias } from './routes/categorias.js';
-import { rutasSalud } from './routes/salud.js';
+import { ApiError } from './lib/errors.js';
+import { productRoutes } from './routes/products.js';
+import { categoryRoutes } from './routes/categories.js';
+import { healthRoutes } from './routes/health.js';
 
 /** @returns {Promise<import('fastify').FastifyInstance>} */
-export async function construirApp() {
+export async function buildApp() {
   const app = Fastify({
-    logger: config.entorno !== 'test',
+    logger: config.environment !== 'test',
   });
 
   await app.register(cors, { origin: config.corsOrigin });
 
-  // Formato único de error para toda la API. No devolvemos stack traces.
+  // Single error format for the whole API. We never return stack traces.
   app.setErrorHandler((error, _request, reply) => {
-    if (error instanceof ErrorApi) {
+    if (error instanceof ApiError) {
       return reply.status(error.status).send({
         error: {
-          codigo: error.codigo,
-          mensaje: error.message,
-          detalles: error.detalles,
+          code: error.code,
+          message: error.message,
+          details: error.details,
         },
       });
     }
@@ -30,22 +30,22 @@ export async function construirApp() {
     if (error instanceof ZodError) {
       return reply.status(422).send({
         error: {
-          codigo: 'parametros_invalidos',
-          mensaje: 'Los parámetros de la petición no son válidos.',
-          detalles: error.flatten().fieldErrors,
+          code: 'invalid_params',
+          message: 'The request parameters are not valid.',
+          details: error.flatten().fieldErrors,
         },
       });
     }
 
     app.log.error(error);
     return reply.status(500).send({
-      error: { codigo: 'error_interno', mensaje: 'Ocurrió un error inesperado.' },
+      error: { code: 'internal_error', message: 'An unexpected error occurred.' },
     });
   });
 
-  await app.register(rutasSalud);
-  await app.register(rutasProductos);
-  await app.register(rutasCategorias);
+  await app.register(healthRoutes);
+  await app.register(productRoutes);
+  await app.register(categoryRoutes);
 
   return app;
 }

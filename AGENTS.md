@@ -1,83 +1,83 @@
 # AGENTS.md — pulpe-api
 
-Instrucciones para cualquier agente de código que trabaje en este repo.
-Si algo acá contradice lo que creés que es la convención "normal" de Node, gana este archivo.
+Instructions for any code agent working in this repo.
+If anything here contradicts what you think is the "normal" Node convention, this file wins.
 
-## Qué es esto
+## What this is
 
-API de catálogo e inventario para pulperías y minisúper.
-**JavaScript puro (ESM), sin TypeScript y sin build step.** Node 20+, Fastify, Prisma sobre SQLite.
-La app móvil que la consume vive en el repo `pulpe-app`.
+Catalog and inventory API for corner stores and mini markets.
+**Plain JavaScript (ESM), no TypeScript and no build step.** Node 20+, Fastify, Prisma over SQLite.
+The mobile app that consumes it lives in the `pulpe-app` repo.
 
-## Comandos
+## Commands
 
 ```bash
 npm install
-npm run setup      # migra la base y la siembra (correr una sola vez)
-npm run dev        # servidor en http://localhost:3000
+npm run setup      # migrates the database and seeds it (run once)
+npm run dev        # server at http://localhost:3000
 npm test           # vitest
 npm run lint       # eslint
 ```
 
-Antes de dar por terminado cualquier cambio: `npm run lint && npm test`.
+Before considering any change done: `npm run lint && npm test`.
 
-## Contrato de la API
+## API contract
 
-**Regla no negociable: el contrato público va en snake_case.** Query params y campos de respuesta.
-Prisma usa camelCase internamente; la traducción se hace en `src/schemas/`, nunca en las rutas.
+**Non-negotiable rule: the public contract is snake_case.** Query params and response fields.
+Prisma uses camelCase internally; the translation happens in `src/schemas/`, never in the routes.
 
-La app móvil está en Dart, donde lo natural es camelCase. Si mandás `ordenPor` en vez de `orden_por`,
-el backend responde 422 y la app no muestra nada. Esto no lo agarra ningún compilador: acá no hay tipos,
-y del lado de Dart los nombres de los params son strings.
+The mobile app is written in Dart, where camelCase is natural. If you send `sortBy` instead of `sort_by`,
+the backend responds 422 and the app shows nothing. No compiler catches this: there are no types here,
+and on the Dart side param names are just strings.
 
-Query params actuales de `GET /productos`:
+Current query params for `GET /products`:
 
-| param | tipo | por defecto | notas |
+| param | type | default | notes |
 |---|---|---|---|
-| `pagina` | int > 0 | 1 | |
-| `por_pagina` | int > 0 | 20 | sin tope todavía, ver `TODO(pulpe-812)` |
+| `page` | int > 0 | 1 | |
+| `per_page` | int > 0 | 20 | no cap yet, see `TODO(pulpe-812)` |
 
-Toda respuesta paginada usa la misma envoltura, construida con `envolverPagina()`:
+Every paginated response uses the same wrapper, built with `wrapPage()`:
 
 ```json
 {
   "items": [],
   "total": 0,
-  "pagina": 1,
-  "por_pagina": 20,
-  "hay_siguiente": false
+  "page": 1,
+  "per_page": 20,
+  "has_next": false
 }
 ```
 
-Todo error usa el mismo formato, lanzando `ErrorApi`:
+Every error uses the same format, thrown as `ApiError`:
 
 ```json
-{ "error": { "codigo": "parametros_invalidos", "mensaje": "…", "detalles": {} } }
+{ "error": { "code": "invalid_params", "message": "…", "details": {} } }
 ```
 
-Códigos en uso: `no_encontrado` (404), `parametros_invalidos` (422), `error_interno` (500).
+Codes in use: `not_found` (404), `invalid_params` (422), `internal_error` (500).
 
-## Convenciones de código
+## Code conventions
 
-- **JavaScript, no TypeScript.** No agregues `.ts`, ni `tsconfig`, ni un paso de compilación. Si querés ayuda del editor, usá comentarios JSDoc como los que ya hay en `src/lib/errores.js` y `src/routes/`.
-- **Módulos:** ESM (`import`/`export`), con extensión `.js` explícita en las rutas relativas. Nada de `require`.
-- **Validación:** como no hay tipos en tiempo de compilación, **zod es la única defensa**. Todo query param y todo body pasa por un esquema antes de tocar Prisma. Si el parseo falla, se lanza `ErrorApi.parametrosInvalidos()`.
-- **Idioma:** el dominio se nombra en español (`producto`, `precio`, `existencias`). Las librerías y sus APIs quedan como están.
-- **Precios:** enteros en céntimos de colón. Nunca flotantes, nunca decimales en la base. El formateo es responsabilidad del cliente.
-- **Base de datos:** los cambios de esquema van siempre por `npm run db:migrate`. Nunca editar la base a mano ni escribir SQL crudo interpolando strings.
-- **Rutas:** una función `rutas<Recurso>` por archivo en `src/routes/`, registrada en `src/app.js`. Nada de lógica de negocio dentro del handler más allá de orquestar.
-- **Errores:** nunca devolver stack traces ni mensajes de Prisma al cliente. Ese es el trabajo del handler en `src/app.js`.
+- **JavaScript, not TypeScript.** Don't add `.ts`, a `tsconfig`, or a build step. If you want editor help, use JSDoc comments like the ones already in `src/lib/errors.js` and `src/routes/`.
+- **Modules:** ESM (`import`/`export`), with an explicit `.js` extension on relative paths. No `require`.
+- **Validation:** since there are no compile-time types, **zod is the only defense**. Every query param and every body goes through a schema before touching Prisma. If parsing fails, throw `ApiError.invalidParams()`.
+- **Language:** domain identifiers are in English (`product`, `price`, `stock`). Libraries and their APIs stay as they are.
+- **Prices:** integers in colón cents. Never floats, never decimals in the database. Formatting is the client's responsibility.
+- **Database:** schema changes always go through `npm run db:migrate`. Never edit the database by hand or write raw SQL with interpolated strings.
+- **Routes:** one `<resource>Routes` function per file in `src/routes/`, registered in `src/app.js`. No business logic inside the handler beyond orchestration.
+- **Errors:** never return stack traces or Prisma messages to the client. That's the handler's job in `src/app.js`.
 
 ## Tests
 
-- Vitest con `app.inject()`, sin levantar puerto.
-- Cada endpoint nuevo necesita mínimo dos casos: uno feliz y uno de parámetros inválidos.
-- Sin tipos, los tests son la red de seguridad principal: si agregás un campo al contrato, agregá un test que verifique su nombre exacto.
-- No borres ni saltes un test para que pase la suite. Si un test estorba, decilo en el PR.
+- Vitest with `app.inject()`, no port listening.
+- Every new endpoint needs at least two cases: one happy path, one invalid parameters.
+- Without types, tests are the main safety net: if you add a field to the contract, add a test that checks its exact name.
+- Don't delete or skip a test to make the suite pass. If a test is in your way, say so in the PR.
 
-## Qué NO hacer
+## What NOT to do
 
-- No migrar el proyecto a TypeScript ni introducir un build step.
-- No agregar dependencias de servicios externos (colas, storage, proveedores de push, APIs de terceros). Este proyecto corre entero en local con SQLite, a propósito.
-- No cambiar el formato de la envoltura de paginación ni el de errores sin actualizar `pulpe-app` en el mismo cambio.
-- No renombrar campos del contrato público sin migrar el cliente.
+- Don't migrate the project to TypeScript or introduce a build step.
+- Don't add dependencies on external services (queues, storage, push providers, third-party APIs). This project runs entirely locally with SQLite, on purpose.
+- Don't change the pagination wrapper format or the error format without updating `pulpe-app` in the same change.
+- Don't rename public contract fields without migrating the client.

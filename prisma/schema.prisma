@@ -1,5 +1,5 @@
-// Esquema de datos de pulpe-api.
-// Cambios al esquema SIEMPRE con `npm run db:migrate`, nunca editando la base a mano.
+// pulpe-api data schema.
+// Schema changes ALWAYS go through `npm run db:migrate`, never by editing the database by hand.
 
 generator client {
   provider = "prisma-client-js"
@@ -13,11 +13,11 @@ datasource db {
 model Category {
   id        String    @id @default(cuid())
   slug      String    @unique
-  nombre    String
+  name      String
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  productos Product[]
+  products  Product[]
 
   @@map("categories")
 }
@@ -25,16 +25,16 @@ model Category {
 model Product {
   id          String   @id @default(cuid())
   sku         String   @unique
-  nombre      String
-  descripcion String
-  // Precio en céntimos de colón. Nunca guardamos decimales en la base.
-  precio      Int
-  existencias Int      @default(0)
-  activo      Boolean  @default(true)
-  imagenUrl   String?
+  name        String
+  description String
+  // Price in colón cents. We never store decimals in the database.
+  price       Int
+  stock       Int      @default(0)
+  active      Boolean  @default(true)
+  imageUrl    String?
 
   categoryId  String
-  categoria   Category @relation(fields: [categoryId], references: [id])
+  category    Category @relation(fields: [categoryId], references: [id])
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

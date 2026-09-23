@@ -2,7 +2,7 @@
   "name": "pulpe-api",
   "version": "0.4.2",
   "private": true,
-  "description": "API de catálogo e inventario para pulperías y minisúper",
+  "description": "Catalog and inventory API for corner stores and mini markets",
   "type": "module",
   "main": "src/server.js",
   "engines": {
