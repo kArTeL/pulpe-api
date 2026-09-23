@@ -35,7 +35,7 @@ Current query params for `GET /products`:
 | param | type | default | notes |
 |---|---|---|---|
 | `page` | int > 0 | 1 | |
-| `per_page` | int > 0 | 20 | no cap yet, see `TODO(pulpe-812)` |
+| `per_page` | int > 0 | 20 | no cap yet, see `TODO(pulpe-812)`; pulpe-app pins `per_page=15` explicitly for its search screen |
 | `q` | string | none | case-insensitive substring match on `name`; trimmed, empty after trim = absent |
 | `category` | string | none | a `Category.slug`; unknown slug returns an empty page (`total: 0`), not a 422 |
 
