@@ -63,6 +63,76 @@ describe('GET /products', () => {
 
     expect(response.json().per_page).toBeLessThanOrEqual(100);
   });
+
+  it('filters by search matching the product name', async () => {
+    const response = await app.inject({ method: 'GET', url: '/products?search=Leche' });
+    const body = response.json();
+
+    expect(response.statusCode).toBe(200);
+    expect(body.items.length).toBeGreaterThan(0);
+    for (const product of body.items) {
+      const haystack = `${product.name} ${product.description}`.toLowerCase();
+      expect(haystack).toContain('leche');
+    }
+  });
+
+  it('filters by search matching only the description, case-insensitively', async () => {
+    const response = await app.inject({ method: 'GET', url: '/products?search=PRODUCTO' });
+    const body = response.json();
+
+    expect(response.statusCode).toBe(200);
+    expect(body.items.length).toBeGreaterThan(0);
+    for (const product of body.items) {
+      expect(product.name.toLowerCase()).not.toContain('producto');
+      expect(product.description.toLowerCase()).toContain('producto');
+    }
+  });
+
+  it('filters by category slug', async () => {
+    const response = await app.inject({ method: 'GET', url: '/products?category=lacteos' });
+    const body = response.json();
+
+    expect(response.statusCode).toBe(200);
+    expect(body.items.length).toBeGreaterThan(0);
+    for (const product of body.items) {
+      expect(product.category.slug).toBe('lacteos');
+    }
+  });
+
+  it('returns an empty page for an unknown category slug', async () => {
+    const response = await app.inject({ method: 'GET', url: '/products?category=does-not-exist' });
+    const body = response.json();
+
+    expect(response.statusCode).toBe(200);
+    expect(body.items).toEqual([]);
+    expect(body.total).toBe(0);
+    expect(body.has_next).toBe(false);
+  });
+
+  it('combines search and category with pagination', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/products?search=Dos%20Pinos&category=lacteos&per_page=2',
+    });
+    const body = response.json();
+
+    expect(response.statusCode).toBe(200);
+    expect(body.items.length).toBeLessThanOrEqual(2);
+    expect(body.total).toBeGreaterThan(2);
+    expect(body.has_next).toBe(true);
+    for (const product of body.items) {
+      expect(product.category.slug).toBe('lacteos');
+      const haystack = `${product.name} ${product.description}`.toLowerCase();
+      expect(haystack).toContain('dos pinos');
+    }
+  });
+
+  it('rejects an empty search param with 422', async () => {
+    const response = await app.inject({ method: 'GET', url: '/products?search=' });
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json().error.code).toBe('invalid_params');
+  });
 });
 
 describe('GET /products/:id', () => {

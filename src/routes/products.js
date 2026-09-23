@@ -14,6 +14,8 @@ const listParams = z.object({
   // entire table into memory. Need to define the max with the team.
   per_page: z.coerce.number().int().positive().default(20),
   page: z.coerce.number().int().positive().default(1),
+  search: z.string().min(1).optional(),
+  category: z.string().min(1).optional(),
 });
 
 /** @param {import('fastify').FastifyInstance} app */
@@ -28,17 +30,30 @@ export async function productRoutes(app) {
       throw ApiError.invalidParams(parsed.error.flatten().fieldErrors);
     }
 
-    const { page, per_page: perPage } = parsed.data;
+    const { page, per_page: perPage, search, category } = parsed.data;
+
+    const where = {
+      active: true,
+      ...(search
+        ? {
+            OR: [
+              { name: { contains: search } },
+              { description: { contains: search } },
+            ],
+          }
+        : {}),
+      ...(category ? { category: { slug: category } } : {}),
+    };
 
     const [products, total] = await Promise.all([
       prisma.product.findMany({
-        where: { active: true },
+        where,
         include: { category: true },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * perPage,
         take: perPage,
       }),
-      prisma.product.count({ where: { active: true } }),
+      prisma.product.count({ where }),
     ]);
 
     return wrapPage(products.map(serializeProduct), {

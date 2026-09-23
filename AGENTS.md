@@ -36,6 +36,8 @@ Current query params for `GET /products`:
 |---|---|---|---|
 | `page` | int > 0 | 1 | |
 | `per_page` | int > 0 | 20 | no cap yet, see `TODO(pulpe-812)` |
+| `search` | string | — | case-insensitive partial match against `Product.name` OR `Product.description` |
+| `category` | string | — | filters by `Category.slug`; an unknown slug returns an empty page, not a 404/422 |
 
 Every paginated response uses the same wrapper, built with `wrapPage()`:
 
