@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { ApiError } from '../lib/errors.js';
-import { wrapPage, serializeProduct } from '../schemas/product.js';
+import { wrapPage, serializeProduct, serializeCategory } from '../schemas/product.js';
 
 /**
  * List query parameters for products.
@@ -14,6 +14,12 @@ const listParams = z.object({
   // entire table into memory. Need to define the max with the team.
   per_page: z.coerce.number().int().positive().default(20),
   page: z.coerce.number().int().positive().default(1),
+  q: z
+    .string()
+    .trim()
+    .optional()
+    .transform((value) => (value ? value : undefined)),
+  category: z.string().trim().min(1).optional(),
 });
 
 /** @param {import('fastify').FastifyInstance} app */
@@ -28,24 +34,41 @@ export async function productRoutes(app) {
       throw ApiError.invalidParams(parsed.error.flatten().fieldErrors);
     }
 
-    const { page, per_page: perPage } = parsed.data;
+    const { page, per_page: perPage, q, category } = parsed.data;
 
-    const [products, total] = await Promise.all([
+    const textFilter = q ? { name: { contains: q } } : {};
+    const where = {
+      active: true,
+      ...textFilter,
+      ...(category ? { category: { slug: category } } : {}),
+    };
+
+    const [products, total, categories] = await Promise.all([
       prisma.product.findMany({
-        where: { active: true },
+        where,
         include: { category: true },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * perPage,
         take: perPage,
       }),
-      prisma.product.count({ where: { active: true } }),
+      prisma.product.count({ where }),
+      prisma.category.findMany({
+        orderBy: { name: 'asc' },
+        include: {
+          _count: { select: { products: { where: { active: true, ...textFilter } } } },
+        },
+      }),
     ]);
 
-    return wrapPage(products.map(serializeProduct), {
-      total,
-      page,
-      perPage,
-    });
+    const categoryCounts = categories.map((cat) => ({
+      category: serializeCategory(cat),
+      count: cat._count.products,
+    }));
+
+    return {
+      ...wrapPage(products.map(serializeProduct), { total, page, perPage }),
+      category_counts: categoryCounts,
+    };
   });
 
   /**

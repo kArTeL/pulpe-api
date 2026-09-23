@@ -36,6 +36,8 @@ Current query params for `GET /products`:
 |---|---|---|---|
 | `page` | int > 0 | 1 | |
 | `per_page` | int > 0 | 20 | no cap yet, see `TODO(pulpe-812)` |
+| `q` | string | none | case-insensitive substring match on `name`; trimmed, empty after trim = absent |
+| `category` | string | none | a `Category.slug`; unknown slug returns an empty page (`total: 0`), not a 422 |
 
 Every paginated response uses the same wrapper, built with `wrapPage()`:
 
@@ -46,6 +48,24 @@ Every paginated response uses the same wrapper, built with `wrapPage()`:
   "page": 1,
   "per_page": 20,
   "has_next": false
+}
+```
+
+`GET /products` additionally includes a `category_counts` field alongside the wrapper above (built by
+spreading `wrapPage()`'s output, never by changing its shape): one entry per existing category, ordered
+by name ascending, with `count` reflecting only the current `q` filter — it ignores the `category` query
+param, so it never changes when the user switches categories.
+
+```json
+{
+  "items": [],
+  "total": 0,
+  "page": 1,
+  "per_page": 20,
+  "has_next": false,
+  "category_counts": [
+    { "category": { "id": "...", "slug": "...", "name": "..." }, "count": 0 }
+  ]
 }
 ```
 
@@ -81,3 +101,10 @@ Codes in use: `not_found` (404), `invalid_params` (422), `internal_error` (500).
 - Don't add dependencies on external services (queues, storage, push providers, third-party APIs). This project runs entirely locally with SQLite, on purpose.
 - Don't change the pagination wrapper format or the error format without updating `pulpe-app` in the same change.
 - Don't rename public contract fields without migrating the client.
+
+## Maintaining this file
+
+Keep this file for knowledge useful to almost every future agent session in this project.
+Do not repeat what the codebase already shows; point to the authoritative file or command instead.
+Prefer rewriting or pruning existing entries over appending new ones.
+When updating this file, preserve this bar for all agents and keep entries concise.

@@ -63,6 +63,80 @@ describe('GET /products', () => {
 
     expect(response.json().per_page).toBeLessThanOrEqual(100);
   });
+
+  it('filters by q, case-insensitively, on a substring of the name', async () => {
+    const response = await app.inject({ method: 'GET', url: '/products?q=leche' });
+    const body = response.json();
+
+    expect(response.statusCode).toBe(200);
+    expect(body.items.length).toBeGreaterThan(0);
+    for (const product of body.items) {
+      expect(product.name.toLowerCase()).toContain('leche');
+    }
+  });
+
+  it('returns an empty page (not an error) when q matches nothing', async () => {
+    const response = await app.inject({ method: 'GET', url: '/products?q=zzznomatch' });
+    const body = response.json();
+
+    expect(response.statusCode).toBe(200);
+    expect(body.items).toEqual([]);
+    expect(body.total).toBe(0);
+  });
+
+  it('filters by a valid category slug', async () => {
+    const response = await app.inject({ method: 'GET', url: '/products?category=lacteos' });
+    const body = response.json();
+
+    expect(response.statusCode).toBe(200);
+    expect(body.items.length).toBeGreaterThan(0);
+    for (const product of body.items) {
+      expect(product.category.slug).toBe('lacteos');
+    }
+  });
+
+  it('returns an empty page (not a 422) for an unknown category slug', async () => {
+    const response = await app.inject({ method: 'GET', url: '/products?category=does-not-exist' });
+    const body = response.json();
+
+    expect(response.statusCode).toBe(200);
+    expect(body.items).toEqual([]);
+    expect(body.total).toBe(0);
+  });
+
+  it('includes category_counts ordered by name, reflecting q but not category', async () => {
+    const base = await app.inject({ method: 'GET', url: '/products?q=leche' });
+    const withCategory = await app.inject({ method: 'GET', url: '/products?q=leche&category=lacteos' });
+    const withOtherCategory = await app.inject({ method: 'GET', url: '/products?q=leche&category=bebidas' });
+
+    const baseCounts = base.json().category_counts;
+    const names = baseCounts.map((entry) => entry.category.name);
+
+    // Matches the same ascending-by-name ordering GET /categories already uses.
+    expect(names).toEqual([...names].sort());
+    expect(withCategory.json().category_counts).toEqual(baseCounts);
+    expect(withOtherCategory.json().category_counts).toEqual(baseCounts);
+
+    const lacteosEntry = baseCounts.find((entry) => entry.category.slug === 'lacteos');
+    expect(lacteosEntry.count).toBeGreaterThan(0);
+  });
+
+  it('combines q, category and page', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/products?q=leche&category=lacteos&page=1&per_page=2',
+    });
+    const body = response.json();
+
+    expect(response.statusCode).toBe(200);
+    expect(body.page).toBe(1);
+    expect(body.per_page).toBe(2);
+    expect(body.items.length).toBeLessThanOrEqual(2);
+    for (const product of body.items) {
+      expect(product.category.slug).toBe('lacteos');
+      expect(product.name.toLowerCase()).toContain('leche');
+    }
+  });
 });
 
 describe('GET /products/:id', () => {
