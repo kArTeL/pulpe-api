@@ -4,6 +4,7 @@ import { ZodError } from 'zod';
 import { config } from './lib/config.js';
 import { ApiError } from './lib/errors.js';
 import { productRoutes } from './routes/products.js';
+import { productSearchRoutes } from './routes/product-search.js';
 import { categoryRoutes } from './routes/categories.js';
 import { healthRoutes } from './routes/health.js';
 
@@ -44,6 +45,7 @@ export async function buildApp() {
   });
 
   await app.register(healthRoutes);
+  await app.register(productSearchRoutes);
   await app.register(productRoutes);
   await app.register(categoryRoutes);
 
