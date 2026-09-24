@@ -41,19 +41,28 @@ export async function productSearchRoutes(app) {
     const where = {
       active: true,
       ...(category ? { category: { slug: category } } : {}),
-      ...(q ? { OR: [{ name: { contains: q } }, { description: { contains: q } }] } : {}),
     };
 
-    const [products, total] = await Promise.all([
-      prisma.product.findMany({
-        where,
-        include: { category: true },
-        orderBy: { name: 'asc' },
-        skip: (page - 1) * SEARCH_PAGE_SIZE,
-        take: SEARCH_PAGE_SIZE,
-      }),
-      prisma.product.count({ where }),
-    ]);
+    let matches = await prisma.product.findMany({
+      where,
+      include: { category: true },
+      orderBy: { name: 'asc' },
+    });
+
+    if (q) {
+      // `contains` compiles to SQL LIKE, whose `%`/`_` are wildcards. Filtering
+      // in JS with a plain substring check treats them as literal characters,
+      // matching what a user typing "10%" or "a_b" actually means.
+      const needle = q.toLowerCase();
+      matches = matches.filter(
+        (product) =>
+          product.name.toLowerCase().includes(needle) ||
+          product.description.toLowerCase().includes(needle),
+      );
+    }
+
+    const total = matches.length;
+    const products = matches.slice((page - 1) * SEARCH_PAGE_SIZE, page * SEARCH_PAGE_SIZE);
 
     return wrapPage(products.map(serializeProduct), {
       total,
