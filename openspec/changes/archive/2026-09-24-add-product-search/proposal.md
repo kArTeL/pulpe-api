@@ -19,7 +19,6 @@ Corner-store staff currently have to page through the full catalog (`GET /produc
 
 ## Impact
 
-- New route (`src/routes/product-search.js`), registered in `src/app.js`.
-- New zod schema for `q`/`category`/`page` in `src/schemas/product.js`.
-- Prisma query against the existing `Product`/`Category` models — no migration needed.
+- New route (`src/routes/product-search.js`), registered in `src/app.js`, with its own `q`/`category`/`page` zod schema.
+- Raw parameterized SQL query (`Prisma.sql`/`$queryRaw`) against the existing `Product`/`Category` models — no migration needed.
 - `pulpe-app` needs a matching change (tracked as its own OpenSpec change in that repo) to add the search UI and repository method that call this endpoint.
