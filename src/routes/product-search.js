@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { ApiError } from '../lib/errors.js';
 import { wrapPage, serializeProduct } from '../schemas/product.js';
@@ -10,6 +11,13 @@ const SEARCH_PAGE_SIZE = 15;
 
 const trimmed = (schema) =>
   z.preprocess((value) => (typeof value === 'string' ? value.trim() : value), schema);
+
+// Prisma's `contains` gives no way to pass a SQL `ESCAPE` clause, so a literal
+// `%`/`_` in `q` would otherwise be read as a LIKE wildcard. Escape them (and
+// the escape character itself) and match with a raw `LIKE ... ESCAPE '\'`.
+function likePattern(value) {
+  return `%${value.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_')}%`;
+}
 
 /**
  * Search query parameters for GET /products/search.
@@ -38,34 +46,55 @@ export async function productSearchRoutes(app) {
 
     const { q, category, page } = parsed.data;
 
-    const where = {
-      active: true,
-      ...(category ? { category: { slug: category } } : {}),
-    };
-
-    let matches = await prisma.product.findMany({
-      where,
-      include: { category: true },
-      orderBy: { name: 'asc' },
-    });
-
+    const conditions = [Prisma.sql`p."active" = 1`];
+    if (category) {
+      conditions.push(Prisma.sql`c."slug" = ${category}`);
+    }
     if (q) {
-      // `contains` compiles to SQL LIKE, whose `%`/`_` are wildcards. Filtering
-      // in JS with a plain substring check treats them as literal characters,
-      // matching what a user typing "10%" or "a_b" actually means.
-      const needle = q.toLowerCase();
-      matches = matches.filter(
-        (product) =>
-          product.name.toLowerCase().includes(needle) ||
-          product.description.toLowerCase().includes(needle),
+      const pattern = likePattern(q);
+      conditions.push(
+        Prisma.sql`(p."name" LIKE ${pattern} ESCAPE '\\' OR p."description" LIKE ${pattern} ESCAPE '\\')`,
       );
     }
+    const where = Prisma.join(conditions, ' AND ');
 
-    const total = matches.length;
-    const products = matches.slice((page - 1) * SEARCH_PAGE_SIZE, page * SEARCH_PAGE_SIZE);
+    const [rows, [{ count }]] = await Promise.all([
+      prisma.$queryRaw`
+        SELECT
+          p."id" AS "id", p."sku" AS "sku", p."name" AS "name",
+          p."description" AS "description", p."price" AS "price",
+          p."stock" AS "stock", p."active" AS "active", p."imageUrl" AS "imageUrl",
+          p."createdAt" AS "createdAt",
+          c."id" AS "categoryId", c."slug" AS "categorySlug", c."name" AS "categoryName"
+        FROM "products" p
+        JOIN "categories" c ON c."id" = p."categoryId"
+        WHERE ${where}
+        ORDER BY p."name" ASC
+        LIMIT ${SEARCH_PAGE_SIZE} OFFSET ${(page - 1) * SEARCH_PAGE_SIZE}
+      `,
+      prisma.$queryRaw`
+        SELECT COUNT(*) AS "count"
+        FROM "products" p
+        JOIN "categories" c ON c."id" = p."categoryId"
+        WHERE ${where}
+      `,
+    ]);
+
+    const products = rows.map((row) => ({
+      id: row.id,
+      sku: row.sku,
+      name: row.name,
+      description: row.description,
+      price: row.price,
+      stock: row.stock,
+      active: row.active,
+      imageUrl: row.imageUrl,
+      createdAt: row.createdAt,
+      category: { id: row.categoryId, slug: row.categorySlug, name: row.categoryName },
+    }));
 
     return wrapPage(products.map(serializeProduct), {
-      total,
+      total: Number(count),
       page,
       perPage: SEARCH_PAGE_SIZE,
     });
