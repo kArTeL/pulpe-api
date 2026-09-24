@@ -65,6 +65,91 @@ describe('GET /products', () => {
   });
 });
 
+describe('GET /products/search', () => {
+  it('filters by free text (q) case-insensitively', async () => {
+    const response = await app.inject({ method: 'GET', url: '/products/search?q=arroz' });
+    const body = response.json();
+
+    expect(response.statusCode).toBe(200);
+    expect(body.items.length).toBeGreaterThan(0);
+    for (const item of body.items) {
+      expect(item.name.toLowerCase()).toContain('arroz');
+    }
+  });
+
+  it('filters by category slug only', async () => {
+    const response = await app.inject({ method: 'GET', url: '/products/search?category=snacks' });
+    const body = response.json();
+
+    expect(response.statusCode).toBe(200);
+    expect(body.items.length).toBeGreaterThan(0);
+    for (const item of body.items) {
+      expect(item.category.slug).toBe('snacks');
+    }
+  });
+
+  it('combines q and category filters', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/products/search?q=leche&category=lacteos',
+    });
+    const body = response.json();
+
+    expect(response.statusCode).toBe(200);
+    expect(body.items.length).toBeGreaterThan(0);
+    for (const item of body.items) {
+      expect(item.category.slug).toBe('lacteos');
+      expect(item.name.toLowerCase()).toContain('leche');
+    }
+  });
+
+  it('defaults per_page to 15 and respects pagination params', async () => {
+    const defaultResponse = await app.inject({ method: 'GET', url: '/products/search' });
+    expect(defaultResponse.json().per_page).toBe(15);
+
+    const firstPage = await app.inject({ method: 'GET', url: '/products/search?per_page=2&page=1' });
+    const secondPage = await app.inject({ method: 'GET', url: '/products/search?per_page=2&page=2' });
+
+    expect(firstPage.json().items.length).toBe(2);
+    expect(firstPage.json().items.map((p) => p.id)).not.toEqual(
+      secondPage.json().items.map((p) => p.id),
+    );
+    expect(firstPage.json().has_next).toBe(firstPage.json().total > 2);
+  });
+
+  it('reports category_counts that ignore the category filter itself', async () => {
+    const withoutCategory = await app.inject({ method: 'GET', url: '/products/search?q=leche' });
+    const withCategory = await app.inject({
+      method: 'GET',
+      url: '/products/search?q=leche&category=lacteos',
+    });
+
+    const countsWithout = withoutCategory.json().category_counts;
+    const countsWith = withCategory.json().category_counts;
+
+    expect(countsWithout).toEqual(countsWith);
+    expect(countsWithout.length).toBeGreaterThan(0);
+
+    const names = countsWithout.map((entry) => entry.category.name);
+    expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
+
+    for (const entry of countsWithout) {
+      expect(entry).toHaveProperty('count');
+      expect(entry.category).toHaveProperty('id');
+      expect(entry.category).toHaveProperty('slug');
+      expect(entry.category).toHaveProperty('name');
+      expect(entry.count).toBeGreaterThan(0);
+    }
+  });
+
+  it('rejects an invalid page with 422', async () => {
+    const response = await app.inject({ method: 'GET', url: '/products/search?page=not-a-number' });
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json().error.code).toBe('invalid_params');
+  });
+});
+
 describe('GET /products/:id', () => {
   it('returns 404 when the product does not exist', async () => {
     const response = await app.inject({ method: 'GET', url: '/products/does-not-exist' });

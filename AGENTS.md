@@ -37,6 +37,21 @@ Current query params for `GET /products`:
 | `page` | int > 0 | 1 | |
 | `per_page` | int > 0 | 20 | no cap yet, see `TODO(pulpe-812)` |
 
+Query params for `GET /products/search`:
+
+| param | type | default | notes |
+|---|---|---|---|
+| `q` | string, optional | — | case-insensitive substring match against `name`; absent/empty means no text filter |
+| `category` | string, optional | — | filters by category `slug` (not id); absent means no category filter |
+| `page` | int > 0 | 1 | |
+| `per_page` | int > 0 | 15 | no cap yet, see `TODO(pulpe-812)` |
+
+`GET /products/search` returns the standard `wrapPage()` envelope plus a top-level `category_counts`
+field: for every category with at least one matching active product, `{ category, count }`, ordered
+by category `name` ascending. `count` reflects matches for the text search `q` only, ignoring the
+`category` filter itself, so the client can render filter options with counts regardless of the
+currently selected category.
+
 Every paginated response uses the same wrapper, built with `wrapPage()`:
 
 ```json
