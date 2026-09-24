@@ -37,6 +37,16 @@ Current query params for `GET /products`:
 | `page` | int > 0 | 1 | |
 | `per_page` | int > 0 | 20 | no cap yet, see `TODO(pulpe-812)` |
 
+Current query params for `GET /products/search` (free-text + category search, see `openspec/specs/product-search/spec.md`):
+
+| param | type | default | notes |
+|---|---|---|---|
+| `q` | string, 1-100 chars after trim | — | matches `name` or `description`, case-insensitive for ASCII |
+| `category` | string, non-empty after trim | — | matches `Category.slug` exactly; unknown slug returns an empty page, not an error |
+| `page` | int > 0 | 1 | |
+
+`per_page` is not accepted on this endpoint — the page size is fixed at **15** and cannot be changed by the client.
+
 Every paginated response uses the same wrapper, built with `wrapPage()`:
 
 ```json
